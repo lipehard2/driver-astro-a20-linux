@@ -104,7 +104,7 @@ struct a20 {
 };
 
 #define A20_MIC_GAIN_MAX_DB 24
-#define A20_MIC_GAIN_DEFAULT_DB 12
+#define A20_MIC_GAIN_DEFAULT_DB 0
 
 /* gip.c */
 int a20_gip_header_len(u32 len);

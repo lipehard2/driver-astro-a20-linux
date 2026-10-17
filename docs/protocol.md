@@ -64,7 +64,19 @@ host SET_INTERFACE(1, 1), então stream iso nos dois sentidos
 - O fone reporta o volume com o subcomando `0x00`: `00 04 32 32 32` (mute=04, gain=0x32, out=0x32, in=0x32).
 - Ele **ignora** comandos de volume do host, tanto no formato `0x03` (`03 04 64 32 64 00 00 00`, usado pelo xone) quanto no
   formato `0x00` (`00 04 32 32 64`). Não responde, e o nível do mic não muda.
-- Com voz, o mic fica entre −31 e −45 dBFS RMS, com ruído de fundo em −65 dBFS. O driver aplica ganho digital
-  (controle ALSA "Mic Capture Volume", 0 a +24 dB, padrão +12 dB).
+- Com voz, o mic fica entre −31 e −45 dBFS RMS, com ruído de fundo em −65 dBFS. O driver oferece ganho digital
+  (controle ALSA "Mic Capture Volume", 0 a +24 dB). O padrão é 0 dB: na prática +12 dB soou alto demais.
 - O ganho de hardware provavelmente está no comando proprietário `0x10` da Astro (não mapeado; exigiria capturar o
   tráfego de um Xbox ou do app da Astro).
+
+## Botão de modo (game ↔ PC)
+- O transmissor sempre liga no modo game (`0042`). O modo é trocado por um **botão** no próprio transmissor, que só
+  funciona depois de ele estar plugado. No modo PC ele se apresenta como `0045`: USB Audio Class com saídas "game" e
+  "chat", mic "chat" e uma interface HID.
+- **Com um host GIP ativo** (o driver `astro_a20` com o handshake concluído), apertar o botão faz o transmissor se
+  desconectar e reaparecer no outro modo em ~1 s, nos dois sentidos. Observado 4 vezes em 2026-10-17.
+- **Sem host GIP** (sem driver, transmissor preso no laço de Announce), o botão **não** provoca reconexão USB: o Linux
+  continua vendo `0042`, sem som. Esse era o problema original ("modo PC só funciona depois de reiniciar").
+- Hipótese (consistente com tudo o que foi observado, não testada isoladamente): o firmware muda o modo internamente e
+  só se reapresenta no próximo reset de barramento. Um reboot do PC reseta o barramento sem cortar a energia, então o
+  transmissor volta no modo novo. Replugar corta a energia e ele volta em game.

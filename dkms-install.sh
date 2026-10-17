@@ -19,10 +19,11 @@ if ! command -v dkms >/dev/null; then
 	exit 1
 fi
 
-# replace an earlier registration of this version
-if dkms status -m "$NAME" -v "$VERSION" | grep -q .; then
-	dkms remove -m "$NAME" -v "$VERSION" --all
-fi
+# replace any earlier registration, including other versions
+for old in $(dkms status -m "$NAME" | sed -n "s#^$NAME/\([^,:]*\).*#\1#p" | sort -u); do
+	dkms remove -m "$NAME" -v "$old" --all
+	rm -rf "/usr/src/$NAME-$old"
+done
 
 rm -rf "$SRC"
 mkdir -p "$SRC"

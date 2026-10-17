@@ -13,9 +13,10 @@ if [ "$(id -u)" -ne 0 ]; then
 	exit 1
 fi
 
-if dkms status -m "$NAME" -v "$VERSION" | grep -q .; then
-	dkms remove -m "$NAME" -v "$VERSION" --all
-fi
+for old in $(dkms status -m "$NAME" | sed -n "s#^$NAME/\([^,:]*\).*#\1#p" | sort -u); do
+	dkms remove -m "$NAME" -v "$old" --all
+	rm -rf "/usr/src/$NAME-$old"
+done
 rm -rf "/usr/src/$NAME-$VERSION"
 
 if lsmod | grep -q '^astro_a20 '; then

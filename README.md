@@ -16,8 +16,7 @@ With the `astro_a20` module loaded, the headset shows up as a regular ALSA/PipeW
 - 48 kHz stereo output
 - 16 kHz mono microphone
 
-> Status: work in progress. Works end to end (music, microphone, PipeWire). Still missing: suspend testing
-> and PC mode without rebooting.
+> Status: work in progress. Works end to end (music, microphone, PipeWire). Still missing: suspend testing.
 
 ### Install (DKMS)
 
@@ -49,9 +48,11 @@ To remove it: `sudo rmmod astro_a20`.
   the transmitter is plugged in requires replugging it.
 - The microphone only sends audio after the host starts the Xbox authentication handshake. The driver does
   this on its own.
-- The headset ignores host volume commands and its microphone is quiet, so the driver applies software gain:
-  the ALSA control **Mic Capture Volume** goes from 0 to +24 dB (default +12 dB), e.g.
-  `amixer -c A20 set Mic 15`.
+- The transmitter always powers up in game mode, and its mode button only switches to PC mode right away while a
+  GIP host is active. Without this driver the button seems to do nothing until the PC reboots; with it, the button
+  switches between game and PC mode in about a second, in both directions.
+- The headset ignores host volume commands, so microphone gain is applied in software: the ALSA control
+  **Mic Capture Volume** goes from 0 to +24 dB (default 0 dB, no gain), e.g. `amixer -c A20 set Mic 6`.
 
 ### Layout
 
@@ -81,8 +82,8 @@ Com o módulo `astro_a20` carregado, o fone aparece como um dispositivo ALSA/Pip
 - saída estéreo 48 kHz
 - microfone mono 16 kHz
 
-> Status: em desenvolvimento. Funciona de ponta a ponta (música, microfone, PipeWire). Ainda faltam: testes de
-> suspensão e modo PC sem reiniciar.
+> Status: em desenvolvimento. Funciona de ponta a ponta (música, microfone, PipeWire). Ainda falta: testar a
+> suspensão.
 
 ### Instalação (DKMS)
 
@@ -113,8 +114,11 @@ Para remover: `sudo rmmod astro_a20`.
 - O firmware do transmissor só aceita ativar o stream de áudio **uma vez por conexão**. Recarregar o módulo com
   o transmissor plugado exige replugá-lo.
 - O microfone só manda áudio depois que o host inicia a autenticação Xbox. O driver faz isso sozinho.
-- O fone ignora comandos de volume do host e o microfone é baixo, então o driver aplica ganho por software:
-  o controle ALSA **Mic Capture Volume** vai de 0 a +24 dB (padrão +12 dB), ex.: `amixer -c A20 set Mic 15`.
+- O transmissor sempre liga no modo game, e o botão de modo só troca para o modo PC na hora quando há um host GIP
+  ativo. Sem este driver o botão parece não fazer nada até o PC ser reiniciado; com ele, o botão alterna entre game e
+  PC em cerca de um segundo, nos dois sentidos.
+- O fone ignora comandos de volume do host, então o ganho do microfone é aplicado por software: o controle ALSA
+  **Mic Capture Volume** vai de 0 a +24 dB (padrão 0 dB, sem ganho), ex.: `amixer -c A20 set Mic 6`.
 
 ### Estrutura
 

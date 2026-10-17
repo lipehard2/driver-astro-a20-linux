@@ -1,0 +1,2 @@
+obj-m := astro_a20.o
+astro_a20-y := main.o gip.o audio.o

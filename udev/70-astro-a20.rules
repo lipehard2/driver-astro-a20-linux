@@ -1,0 +1,4 @@
+# Astro A20 transmitter: give logged-in users access to the raw USB device
+# (needed by tools/gip_probe while developing; harmless with the kernel driver)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="9886", ATTRS{idProduct}=="0042", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="9886", ATTRS{idProduct}=="0045", TAG+="uaccess"

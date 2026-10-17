@@ -1,0 +1,13 @@
+ref/
+*.o
+*.ko
+*.mod
+*.mod.c
+*.cmd
+Module.symvers
+modules.order
+.tmp_versions/
+*.wav
+*.pcapng
+__pycache__/
+tools/gip_probe

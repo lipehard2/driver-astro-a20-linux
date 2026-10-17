@@ -8,7 +8,15 @@
 
 #include <linux/spinlock.h>
 #include <linux/usb.h>
+#include <linux/version.h>
 #include <linux/workqueue.h>
+
+/* system_wq is deprecated in favour of system_percpu_wq, which older kernels lack */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
+#define a20_wq system_percpu_wq
+#else
+#define a20_wq system_wq
+#endif
 
 #define A20_VID 0x9886
 #define A20_PID_GAME 0x0042

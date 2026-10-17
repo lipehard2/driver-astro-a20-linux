@@ -381,7 +381,7 @@ static void a20_gip_handle_audio_control(struct a20 *a20, const u8 *data,
 		a20_gip_send_auth_hello(a20);
 		a20_gip_set_state(a20, A20_ST_POWERING_ON);
 		a20->power_tries = 0;
-		mod_delayed_work(system_percpu_wq, &a20->state_work, 0);
+		mod_delayed_work(a20_wq, &a20->state_work, 0);
 		break;
 	case GIP_AUD_CTRL_VOLUME_CHAT:
 	case GIP_AUD_CTRL_VOLUME:
@@ -526,7 +526,7 @@ void a20_gip_state_work(struct work_struct *work)
 		}
 		a20->power_tries++;
 		a20_gip_send_power(a20, GIP_PWR_ON);
-		mod_delayed_work(system_percpu_wq, &a20->state_work,
+		mod_delayed_work(a20_wq, &a20->state_work,
 				 A20_POWER_RETRY_DELAY);
 		break;
 	default:

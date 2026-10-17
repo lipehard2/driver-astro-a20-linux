@@ -30,11 +30,27 @@ mkdir -p "$SRC"
 cp -r Makefile dkms.conf src "$SRC/"
 
 dkms add -m "$NAME" -v "$VERSION"
+
+# older kernels that are still installed may fail; only the running one must build
+status=0
 for build in /lib/modules/*/build; do
 	kernel=$(basename "$(dirname "$build")")
 	[ -e "$build/Makefile" ] || continue
-	dkms install -m "$NAME" -v "$VERSION" -k "$kernel"
+	if ! dkms install -m "$NAME" -v "$VERSION" -k "$kernel"; then
+		echo "warning: building for kernel $kernel failed" >&2
+		[ "$kernel" = "$(uname -r)" ] && status=1
+	fi
 done
+
+if [ ! -e "/lib/modules/$(uname -r)/build/Makefile" ]; then
+	echo "error: no headers for the running kernel $(uname -r)" >&2
+	status=1
+fi
+
+if [ "$status" -ne 0 ]; then
+	echo "error: the module could not be built for the running kernel" >&2
+	exit 1
+fi
 
 echo
 echo "Installed. The module now loads automatically whenever the transmitter"

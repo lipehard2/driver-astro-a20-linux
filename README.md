@@ -18,17 +18,60 @@ With the `astro_a20` module loaded, the headset shows up as a regular ALSA/PipeW
 
 > Status: work in progress. Works end to end (music, microphone, PipeWire). Still missing: suspend testing.
 
-### Install (DKMS)
+### Install
 
-Requires `dkms` and the headers of each installed kernel. DKMS rebuilds the module automatically on kernel
-updates, and it loads on its own whenever the transmitter is plugged in in game mode.
+The driver is installed with DKMS, which rebuilds it automatically on every kernel update. Once installed, it loads
+on its own whenever the transmitter is plugged in in game mode.
+
+**1. Install the dependencies**
+
+| Distribution | Command |
+|---|---|
+| Ubuntu, Linux Mint, Pop!_OS | `sudo apt install git dkms build-essential linux-headers-$(uname -r)` |
+| Debian | `sudo apt install git dkms build-essential linux-headers-amd64` |
+| Fedora | `sudo dnf install git dkms gcc make kernel-devel-matched` |
+| Arch, EndeavourOS | `sudo pacman -S git dkms linux-headers` |
+| CachyOS | `sudo pacman -S git dkms linux-cachyos-headers` |
+| Manjaro | `sudo pacman -S git dkms linuxXY-headers` (e.g. `linux612-headers`; `mhwd-kernel -li` shows your kernel) |
+
+On Ubuntu and Mint, make sure the headers metapackage of your kernel series is installed too
+(`linux-headers-generic`, or `linux-headers-generic-hwe-24.04` on an HWE kernel), so that headers keep arriving with
+kernel updates. If you use a kernel other than the default one (e.g. `linux-lts`, `linux-zen`), install its
+`-headers` package as well.
+
+**2. Download and install the driver**
 
 ```sh
-sudo pacman -S dkms        # Arch / CachyOS; use your distribution's package manager otherwise
+git clone https://github.com/lipehard2/driver-astro-a20-linux.git
+cd driver-astro-a20-linux
 sudo ./dkms-install.sh
 ```
 
-Then reboot, or unplug and replug the transmitter. To uninstall: `sudo ./dkms-uninstall.sh`.
+**3. Plug the transmitter in** (or unplug and replug it) and check:
+
+```sh
+aplay -l | grep A20     # should list "Astro A20"
+```
+
+To uninstall: `sudo ./dkms-uninstall.sh`.
+
+#### Secure Boot
+
+With Secure Boot enabled (check with `mokutil --sb-state`), the kernel only loads signed modules, and loading fails
+with `Key was rejected by service`. DKMS signs the module with a local key, which has to be enrolled once:
+
+- **Ubuntu, Mint, Debian:** the `dkms` installation asks for a password and enrolls the key automatically.
+- **Fedora and others:** run `sudo mokutil --import /var/lib/dkms/mok.pub` and choose a password.
+
+Then reboot. A blue *MOK management* screen appears: choose **Enroll MOK**, **Continue**, **Yes**, type the password
+and reboot.
+
+#### Compatibility
+
+| Tested | Kernels |
+|---|---|
+| Builds (Ubuntu 22.04 and 24.04, Debian 13, Fedora 44, CachyOS) | 5.15 to 7.2 |
+| Runs with the headset (CachyOS) | 6.18 LTS and 7.2 |
 
 ### Build and load manually (development)
 
@@ -85,17 +128,61 @@ Com o módulo `astro_a20` carregado, o fone aparece como um dispositivo ALSA/Pip
 > Status: em desenvolvimento. Funciona de ponta a ponta (música, microfone, PipeWire). Ainda falta: testar a
 > suspensão.
 
-### Instalação (DKMS)
+### Instalação
 
-Requer o `dkms` e os headers de cada kernel instalado. O DKMS recompila o módulo sozinho a cada atualização do
-kernel, e ele é carregado automaticamente sempre que o transmissor é plugado no modo game.
+O driver é instalado com o DKMS, que o recompila sozinho a cada atualização do kernel. Depois de instalado, ele é
+carregado automaticamente sempre que o transmissor é plugado no modo game.
+
+**1. Instale as dependências**
+
+| Distribuição | Comando |
+|---|---|
+| Ubuntu, Linux Mint, Pop!_OS | `sudo apt install git dkms build-essential linux-headers-$(uname -r)` |
+| Debian | `sudo apt install git dkms build-essential linux-headers-amd64` |
+| Fedora | `sudo dnf install git dkms gcc make kernel-devel-matched` |
+| Arch, EndeavourOS | `sudo pacman -S git dkms linux-headers` |
+| CachyOS | `sudo pacman -S git dkms linux-cachyos-headers` |
+| Manjaro | `sudo pacman -S git dkms linuxXY-headers` (ex.: `linux612-headers`; `mhwd-kernel -li` mostra o seu kernel) |
+
+No Ubuntu e no Mint, confira se o metapacote de headers da sua série de kernel também está instalado
+(`linux-headers-generic`, ou `linux-headers-generic-hwe-24.04` num kernel HWE), para que os headers continuem
+chegando com as atualizações do kernel. Se você usa outro kernel além do padrão (ex.: `linux-lts`, `linux-zen`),
+instale também o pacote `-headers` dele.
+
+**2. Baixe e instale o driver**
 
 ```sh
-sudo pacman -S dkms        # Arch / CachyOS; em outras distribuições use o gerenciador de pacotes delas
+git clone https://github.com/lipehard2/driver-astro-a20-linux.git
+cd driver-astro-a20-linux
 sudo ./dkms-install.sh
 ```
 
-Depois reinicie, ou desplugue e replugue o transmissor. Para desinstalar: `sudo ./dkms-uninstall.sh`.
+**3. Plugue o transmissor** (ou desplugue e replugue) e confira:
+
+```sh
+aplay -l | grep A20     # deve listar "Astro A20"
+```
+
+Para desinstalar: `sudo ./dkms-uninstall.sh`.
+
+#### Secure Boot
+
+Com o Secure Boot ativado (confira com `mokutil --sb-state`), o kernel só carrega módulos assinados, e o
+carregamento falha com `Key was rejected by service`. O DKMS assina o módulo com uma chave local, que precisa ser
+registrada uma vez:
+
+- **Ubuntu, Mint, Debian:** a instalação do `dkms` pede uma senha e registra a chave automaticamente.
+- **Fedora e outras:** rode `sudo mokutil --import /var/lib/dkms/mok.pub` e escolha uma senha.
+
+Depois reinicie. Vai aparecer uma tela azul de *MOK management*: escolha **Enroll MOK**, **Continue**, **Yes**,
+digite a senha e reinicie.
+
+#### Compatibilidade
+
+| Testado | Kernels |
+|---|---|
+| Compilação (Ubuntu 22.04 e 24.04, Debian 13, Fedora 44, CachyOS) | 5.15 a 7.2 |
+| Funcionamento com o fone (CachyOS) | 6.18 LTS e 7.2 |
 
 ### Compilar e carregar manualmente (desenvolvimento)
 

@@ -172,6 +172,8 @@ static int a20_probe(struct usb_interface *intf,
 	a20->intf_data = intf;
 	a20->data_seq = 1;
 	a20->state = A20_ST_WAIT_ANNOUNCE;
+	a20->mic_gain_db = A20_MIC_GAIN_DEFAULT_DB;
+	a20->mic_enabled = true;
 	spin_lock_init(&a20->lock);
 	init_usb_anchor(&a20->data_out_idle);
 	init_usb_anchor(&a20->data_out_busy);

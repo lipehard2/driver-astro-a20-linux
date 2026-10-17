@@ -57,3 +57,14 @@ host SET_INTERFACE(1, 1), então stream iso nos dois sentidos
 - O kernel manda esse alt 0 sozinho quando a interface é liberada (`usb_unbind_interface`): ao fechar o libusb, no
   `rmmod`/unbind do driver.
 - Consequência para o driver: ativar alt 1 **uma única vez por conexão** e manter o stream rodando (silêncio quando ocioso).
+- Um reboot quente do PC deixa o dongle limpo: depois do reboot ele se anuncia de novo e o driver fica pronto ~1 s depois
+  de carregar (testado em 2026-10-17, CachyOS 7.2.9). Ainda não foi testado suspender e retomar.
+
+## Ganho do microfone
+- O fone reporta o volume com o subcomando `0x00`: `00 04 32 32 32` (mute=04, gain=0x32, out=0x32, in=0x32).
+- Ele **ignora** comandos de volume do host, tanto no formato `0x03` (`03 04 64 32 64 00 00 00`, usado pelo xone) quanto no
+  formato `0x00` (`00 04 32 32 64`). Não responde, e o nível do mic não muda.
+- Com voz, o mic fica entre −31 e −45 dBFS RMS, com ruído de fundo em −65 dBFS. O driver aplica ganho digital
+  (controle ALSA "Mic Capture Volume", 0 a +24 dB, padrão +12 dB).
+- O ganho de hardware provavelmente está no comando proprietário `0x10` da Astro (não mapeado; exigiria capturar o
+  tráfego de um Xbox ou do app da Astro).

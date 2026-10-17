@@ -97,7 +97,14 @@ struct a20 {
 	struct snd_card *card;
 	struct a20_stream playback;
 	struct a20_stream capture;
+
+	/* software microphone gain: the headset ignores host volume commands */
+	int mic_gain_db;
+	bool mic_enabled;
 };
+
+#define A20_MIC_GAIN_MAX_DB 24
+#define A20_MIC_GAIN_DEFAULT_DB 12
 
 /* gip.c */
 int a20_gip_header_len(u32 len);

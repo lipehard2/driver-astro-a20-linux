@@ -10,9 +10,12 @@
  */
 
 #include <linux/slab.h>
+#include <linux/unaligned.h>
+#include <sound/control.h>
 #include <sound/core.h>
 #include <sound/initval.h>
 #include <sound/pcm.h>
+#include <sound/tlv.h>
 
 #include "astro_a20.h"
 
@@ -101,17 +104,38 @@ static bool a20_copy_playback(struct a20_stream *stream,
 	return a20_stream_advance(stream, runtime, len);
 }
 
-/* copy len bytes of captured samples into the ring buffer */
-static bool a20_copy_capture(struct a20_stream *stream,
-			     struct snd_pcm_runtime *runtime, const u8 *src,
-			     int len)
-{
-	unsigned int buf_bytes = frames_to_bytes(runtime, runtime->buffer_size);
-	unsigned int part = min_t(unsigned int, len, buf_bytes - stream->pos);
+/* round(4096 * 10^(dB / 20)) for 0..24 dB */
+static const u16 a20_mic_gain_q12[A20_MIC_GAIN_MAX_DB + 1] = {
+	4096, 4596, 5157, 5786, 6492, 7284,
+	8173, 9170, 10289, 11544, 12953, 14533,
+	16306, 18296, 20529, 23034, 25844, 28997,
+	32536, 36506, 40960, 45958, 51566, 57858,
+	64917,
+};
 
-	memcpy(runtime->dma_area + stream->pos, src, part);
-	if (part < len)
-		memcpy(runtime->dma_area, src + part, len - part);
+/* amplify len bytes of captured samples into the ring buffer */
+static bool a20_copy_capture(struct a20 *a20, struct snd_pcm_runtime *runtime,
+			     const u8 *src, int len)
+{
+	struct a20_stream *stream = &a20->capture;
+	unsigned int buf_bytes = frames_to_bytes(runtime, runtime->buffer_size);
+	unsigned int pos = stream->pos;
+	s32 gain = 0;
+	s32 val;
+	int i;
+
+	if (READ_ONCE(a20->mic_enabled))
+		gain = a20_mic_gain_q12[READ_ONCE(a20->mic_gain_db)];
+
+	for (i = 0; i + 1 < len; i += 2) {
+		val = (s16)get_unaligned_le16(src + i) * gain >> 12;
+		put_unaligned_le16(clamp_t(s32, val, S16_MIN, S16_MAX),
+				   runtime->dma_area + pos);
+
+		pos += 2;
+		if (pos >= buf_bytes)
+			pos = 0;
+	}
 
 	return a20_stream_advance(stream, runtime, len);
 }
@@ -215,8 +239,8 @@ static void a20_audio_in_complete(struct urb *urb)
 		if (pkt_len <= 2)
 			continue;
 
-		elapsed |= a20_copy_capture(&a20->capture, sub->runtime,
-					    pkt + n + 2, (pkt_len - 2) & ~1);
+		elapsed |= a20_copy_capture(a20, sub->runtime, pkt + n + 2,
+					    (pkt_len - 2) & ~1);
 	}
 
 	if (sub) {
@@ -429,11 +453,95 @@ static const struct snd_pcm_ops a20_pcm_ops = {
 	.pointer = a20_pcm_pointer,
 };
 
+static const DECLARE_TLV_DB_SCALE(a20_mic_gain_tlv, 0, 100, 0);
+
+static int a20_mic_volume_info(struct snd_kcontrol *kctl,
+			       struct snd_ctl_elem_info *info)
+{
+	info->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
+	info->count = 1;
+	info->value.integer.min = 0;
+	info->value.integer.max = A20_MIC_GAIN_MAX_DB;
+
+	return 0;
+}
+
+static int a20_mic_volume_get(struct snd_kcontrol *kctl,
+			      struct snd_ctl_elem_value *val)
+{
+	struct a20 *a20 = snd_kcontrol_chip(kctl);
+
+	val->value.integer.value[0] = READ_ONCE(a20->mic_gain_db);
+
+	return 0;
+}
+
+static int a20_mic_volume_put(struct snd_kcontrol *kctl,
+			      struct snd_ctl_elem_value *val)
+{
+	struct a20 *a20 = snd_kcontrol_chip(kctl);
+	long db = val->value.integer.value[0];
+
+	if (db < 0 || db > A20_MIC_GAIN_MAX_DB)
+		return -EINVAL;
+
+	if (db == READ_ONCE(a20->mic_gain_db))
+		return 0;
+
+	WRITE_ONCE(a20->mic_gain_db, db);
+
+	return 1;
+}
+
+static int a20_mic_switch_get(struct snd_kcontrol *kctl,
+			      struct snd_ctl_elem_value *val)
+{
+	struct a20 *a20 = snd_kcontrol_chip(kctl);
+
+	val->value.integer.value[0] = READ_ONCE(a20->mic_enabled);
+
+	return 0;
+}
+
+static int a20_mic_switch_put(struct snd_kcontrol *kctl,
+			      struct snd_ctl_elem_value *val)
+{
+	struct a20 *a20 = snd_kcontrol_chip(kctl);
+	bool enabled = !!val->value.integer.value[0];
+
+	if (enabled == READ_ONCE(a20->mic_enabled))
+		return 0;
+
+	WRITE_ONCE(a20->mic_enabled, enabled);
+
+	return 1;
+}
+
+static const struct snd_kcontrol_new a20_controls[] = {
+	{
+		.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
+		.name = "Mic Capture Volume",
+		.access = SNDRV_CTL_ELEM_ACCESS_READWRITE |
+			  SNDRV_CTL_ELEM_ACCESS_TLV_READ,
+		.info = a20_mic_volume_info,
+		.get = a20_mic_volume_get,
+		.put = a20_mic_volume_put,
+		.tlv.p = a20_mic_gain_tlv,
+	},
+	{
+		.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
+		.name = "Mic Capture Switch",
+		.info = snd_ctl_boolean_mono_info,
+		.get = a20_mic_switch_get,
+		.put = a20_mic_switch_put,
+	},
+};
+
 int a20_card_register(struct a20 *a20)
 {
 	struct snd_card *card;
 	struct snd_pcm *pcm;
-	int err;
+	int i, err;
 
 	err = snd_card_new(&a20->intf_data->dev, SNDRV_DEFAULT_IDX1, "A20",
 			   THIS_MODULE, 0, &card);
@@ -456,6 +564,12 @@ int a20_card_register(struct a20 *a20)
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &a20_pcm_ops);
 	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_CAPTURE, &a20_pcm_ops);
 	snd_pcm_set_managed_buffer_all(pcm, SNDRV_DMA_TYPE_VMALLOC, NULL, 0, 0);
+
+	for (i = 0; i < ARRAY_SIZE(a20_controls); i++) {
+		err = snd_ctl_add(card, snd_ctl_new1(&a20_controls[i], a20));
+		if (err)
+			goto err_free;
+	}
 
 	err = snd_card_register(card);
 	if (err)

@@ -12,7 +12,7 @@
  *   -s  run time in seconds (default 10)
  *   -r  reset the USB device before starting
  *   -q  do not log audio packets
- *   -v  send a host volume command N seconds after streaming starts
+ *   -v  send volume commands N s (subcmd 0x03) and 2N s (subcmd 0x00) after streaming starts
  *   -z  switch the audio interface back to alt 0 on exit
  *   -n  do not issue SET_INTERFACE (assume alt 1 is still active)
  *   -a  send an unauthenticated "auth complete" after power on
@@ -134,7 +134,9 @@ static bool got_volume, got_audio_in;
 static unsigned long audio_in_pkts, audio_out_pkts, audio_out_errs;
 static unsigned long mic_samples, mic_nonzero;
 static int mic_peak, last_in_len = -1;
+static double mic_sumsq;
 static double volume_at = -1;
+static int volume_stage;
 
 static double now(void)
 {
@@ -514,7 +516,7 @@ static void handle_audio_control(const uint8_t *data, uint32_t len)
 		got_volume = true;
 		break;
 	case GIP_AUD_CTRL_VOLUME_CHAT:
-		log("chat volume report");
+		hexdump("chat volume report", data, len);
 		got_volume = true;
 		break;
 	default:
@@ -751,6 +753,7 @@ static void LIBUSB_CALL audio_in_cb(struct libusb_transfer *xfer)
 			for (uint32_t i = 0; i < (hdr.length - 2) / 2; i++) {
 				if (smp[i])
 					mic_nonzero++;
+				mic_sumsq += (double)smp[i] * smp[i];
 				if (abs(smp[i]) > mic_peak)
 					mic_peak = abs(smp[i]);
 			}
@@ -951,23 +954,39 @@ int main(int argc, char **argv)
 		}
 
 		if (state == ST_STREAMING && volume_at >= 0 &&
-		    t - stream_start >= volume_at) {
+		    t - stream_start >= volume_at && volume_stage == 0) {
 			/* subcmd VOLUME: mute, out, chat, in, unknown[3] */
 			uint8_t pkt[8] = { GIP_AUD_CTRL_VOLUME, 0x04, 100, 50, 100 };
 
-			log("sending host volume command");
+			log(">>> sending volume command, subcmd 0x03 format, in=100");
 			send_pkt(GIP_CMD_AUDIO_CONTROL, GIP_OPT_INTERNAL, 0, pkt,
 				 sizeof(pkt));
-			volume_at = -1;
+			volume_stage = 1;
+		}
+
+		if (state == ST_STREAMING && volume_at >= 0 &&
+		    t - stream_start >= 2 * volume_at && volume_stage == 1) {
+			/* same layout the headset reports: mute, gain, out, in */
+			uint8_t pkt[5] = { GIP_AUD_CTRL_VOLUME_CHAT, 0x04, 0x32,
+					   0x32, 100 };
+
+			log(">>> sending volume command, subcmd 0x00 format, in=100");
+			send_pkt(GIP_CMD_AUDIO_CONTROL, GIP_OPT_INTERNAL, 0, pkt,
+				 sizeof(pkt));
+			volume_stage = 2;
 		}
 
 		if (state == ST_STREAMING && t - last_stats >= 2.0) {
 			last_stats = t;
-			log("stats: audio out ok=%lu err=%lu, in pkts=%lu, mic samples=%lu nonzero=%lu peak=%d",
+			double rms = mic_samples ? sqrt(mic_sumsq / mic_samples) : 0;
+
+			log("stats: audio out ok=%lu err=%lu, in pkts=%lu, mic nonzero=%lu/%lu peak=%d rms=%.1f dBFS",
 			    audio_out_pkts, audio_out_errs, audio_in_pkts,
-			    mic_samples, mic_nonzero, mic_peak);
+			    mic_nonzero, mic_samples, mic_peak,
+			    20 * log10(rms > 1 ? rms / 32768 : 1.0 / 32768));
 			mic_samples = mic_nonzero = 0;
 			mic_peak = 0;
+			mic_sumsq = 0;
 		}
 	}
 

@@ -14,8 +14,10 @@ module:
 tools:
 	$(MAKE) -C tools
 
-clean:
+module-clean:
 	$(MAKE) -C $(KDIR) M=$(CURDIR)/src $(KBUILD_LLVM) clean
+
+clean: module-clean
 	$(MAKE) -C tools clean
 
-.PHONY: all module tools clean
+.PHONY: all module tools module-clean clean

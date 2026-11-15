@@ -58,7 +58,12 @@ host SET_INTERFACE(1, 1), então stream iso nos dois sentidos
   `rmmod`/unbind do driver.
 - Consequência para o driver: ativar alt 1 **uma única vez por conexão** e manter o stream rodando (silêncio quando ocioso).
 - Um reboot quente do PC deixa o dongle limpo: depois do reboot ele se anuncia de novo e o driver fica pronto ~1 s depois
-  de carregar (testado em 2026-10-17, CachyOS 7.2.9). Ainda não foi testado suspender e retomar.
+  de carregar (testado em 2026-10-17, CachyOS 7.2.9).
+- Suspensão (S3): sem rotinas de PM o core USB desvincula o driver ao suspender, e o rebind selecionaria alt 1 de
+  novo. O driver tem `suspend`/`resume`/`reset_resume`: suspender só para os URBs, sem mexer no alt setting.
+- Testado em 2026-11-15 (CachyOS 7.3.4, S3 com música tocando): o dongle manteve a sessão (sem reset de porta nem
+  novo Announce) e o áudio voltou só religando os streams. Os caminhos de `reset_resume` e de Announce durante o
+  streaming (refazer o handshake) não foram provocados neste hardware.
 
 ## Ganho do microfone
 - O fone reporta o volume com o subcomando `0x00`: `00 04 32 32 32` (mute=04, gain=0x32, out=0x32, in=0x32).

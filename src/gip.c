@@ -221,6 +221,17 @@ static void a20_gip_set_state(struct a20 *a20, enum a20_state state)
 	a20->state = state;
 }
 
+/* forget the handshake progress; called with the lock held */
+void a20_gip_reset(struct a20 *a20)
+{
+	a20->state = A20_ST_WAIT_ANNOUNCE;
+	a20->got_volume = false;
+	a20->auth_hello_sent = false;
+	a20->power_tries = 0;
+	kfree(a20->chunk_buf);
+	a20->chunk_buf = NULL;
+}
+
 static void a20_gip_send_identify(struct a20 *a20)
 {
 	a20_gip_set_state(a20, A20_ST_WAIT_IDENTIFY);
@@ -399,8 +410,15 @@ static void a20_gip_dispatch(struct a20 *a20, u8 cmd, u8 options,
 	switch (cmd) {
 	case GIP_CMD_ANNOUNCE:
 		/* repeated until the identify request arrives */
-		if (a20->state <= A20_ST_WAIT_IDENTIFY && !a20->chunk_buf)
+		if (a20->state <= A20_ST_WAIT_IDENTIFY && !a20->chunk_buf) {
 			a20_gip_send_identify(a20);
+		} else if (a20->state == A20_ST_STREAMING) {
+			/* the transmitter restarted its session, e.g. after resume */
+			dev_info(&a20->intf_data->dev,
+				 "transmitter restarted, redoing handshake\n");
+			a20_gip_reset(a20);
+			a20_gip_send_identify(a20);
+		}
 		break;
 	case GIP_CMD_STATUS:
 		if (len >= 1)

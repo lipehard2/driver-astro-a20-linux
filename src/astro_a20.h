@@ -92,7 +92,8 @@ struct a20 {
 
 	struct delayed_work state_work;
 	struct work_struct start_work;
-	bool audio_started; /* alt 1 may only be selected once per plug */
+	bool alt_selected; /* alt 1 may only be selected once per plug */
+	bool streams_running;
 	bool disconnected;
 
 	/* audio (interface 1, alt 1) */
@@ -123,6 +124,7 @@ int a20_gip_send(struct a20 *a20, u8 cmd, u8 options, u8 seq,
 		 const void *payload, u32 len);
 int a20_gip_send_power(struct a20 *a20, u8 mode);
 void a20_gip_process(struct a20 *a20, const u8 *data, int len);
+void a20_gip_reset(struct a20 *a20);
 void a20_gip_state_work(struct work_struct *work);
 
 #define GIP_PWR_ON 0x00
@@ -135,5 +137,6 @@ void a20_audio_stop(struct a20 *a20);
 void a20_audio_free(struct a20 *a20);
 int a20_card_register(struct a20 *a20);
 void a20_card_disconnect(struct a20 *a20);
+void a20_card_set_power(struct a20 *a20, bool on);
 
 #endif /* ASTRO_A20_H */

@@ -588,13 +588,24 @@ err_free:
 	return err;
 }
 
+/*
+ * Never wait for userspace here: during system sleep it is frozen. After
+ * snd_card_disconnect() ALSA calls none of our callbacks except the trivial
+ * close, so the card may outlive struct a20 until its last file is closed.
+ */
 void a20_card_disconnect(struct a20 *a20)
 {
 	if (!a20->card)
 		return;
 
-	/* waits until userspace has closed every file of the card */
-	snd_card_disconnect_sync(a20->card);
-	snd_card_free(a20->card);
+	snd_card_disconnect(a20->card);
+	snd_card_free_when_closed(a20->card);
 	a20->card = NULL;
+}
+
+void a20_card_set_power(struct a20 *a20, bool on)
+{
+	if (a20->card)
+		snd_power_change_state(a20->card, on ? SNDRV_CTL_POWER_D0 :
+						       SNDRV_CTL_POWER_D3hot);
 }

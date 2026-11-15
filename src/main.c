@@ -50,32 +50,43 @@ static void a20_start_work(struct work_struct *work)
 	struct device *dev = &a20->intf_data->dev;
 	int err;
 
-	if (a20->audio_started || a20->disconnected)
+	if (a20->disconnected)
 		return;
 
 	/*
 	 * The transmitter wedges its control endpoint if alt 1 is selected
-	 * a second time, so this happens exactly once per plug.
+	 * a second time, so this happens exactly once per plug. After a
+	 * reset-resume the USB core restores alt 1 by itself.
 	 */
-	a20->audio_started = true;
+	if (!a20->alt_selected) {
+		a20->alt_selected = true;
 
-	err = usb_set_interface(a20->udev, A20_INTF_AUDIO, 1);
-	if (err) {
-		dev_err(dev, "enabling audio failed: %d (replug the transmitter)\n",
-			err);
-		return;
+		err = usb_set_interface(a20->udev, A20_INTF_AUDIO, 1);
+		if (err) {
+			dev_err(dev, "enabling audio failed: %d (replug the transmitter)\n",
+				err);
+			return;
+		}
 	}
 
-	err = a20_audio_start(a20);
-	if (err) {
-		dev_err(dev, "starting audio streams failed: %d\n", err);
-		return;
+	if (!a20->streams_running) {
+		err = a20_audio_start(a20);
+		if (err) {
+			dev_err(dev, "starting audio streams failed: %d\n",
+				err);
+			return;
+		}
+		a20->streams_running = true;
 	}
+
+	if (a20->card)
+		return;
 
 	err = a20_card_register(a20);
 	if (err) {
 		dev_err(dev, "registering sound card failed: %d\n", err);
 		a20_audio_stop(a20);
+		a20->streams_running = false;
 		return;
 	}
 
@@ -249,7 +260,7 @@ static void a20_disconnect(struct usb_interface *intf)
 	a20_audio_stop(a20);
 
 	/* power the headset down before the core switches back to alt 0 */
-	if (a20->audio_started && a20->udev->state != USB_STATE_NOTATTACHED) {
+	if (a20->alt_selected && a20->udev->state != USB_STATE_NOTATTACHED) {
 		spin_lock_irqsave(&a20->lock, flags);
 		a20_gip_send_power(a20, GIP_PWR_SLEEP);
 		spin_unlock_irqrestore(&a20->lock, flags);
@@ -264,6 +275,78 @@ static void a20_disconnect(struct usb_interface *intf)
 		usb_driver_release_interface(&a20_driver, a20->intf_audio);
 
 	a20_free(a20);
+}
+
+/*
+ * Without these callbacks the USB core would unbind the driver around system
+ * sleep, and rebinding would select alt 1 a second time.
+ */
+static int a20_suspend(struct usb_interface *intf, pm_message_t message)
+{
+	struct a20 *a20 = usb_get_intfdata(intf);
+
+	if (!a20 || intf != a20->intf_data)
+		return 0;
+
+	usb_kill_urb(a20->data_in_urb);
+	cancel_delayed_work_sync(&a20->state_work);
+	cancel_work_sync(&a20->start_work);
+
+	a20_card_set_power(a20, false);
+	a20_audio_stop(a20);
+	a20->streams_running = false;
+	usb_kill_anchored_urbs(&a20->data_out_busy);
+
+	return 0;
+}
+
+static int a20_restart(struct a20 *a20, bool reset)
+{
+	unsigned long flags;
+	bool streaming;
+	int err;
+
+	/* after a reset the transmitter has to be greeted again */
+	spin_lock_irqsave(&a20->lock, flags);
+	streaming = !reset && a20->state == A20_ST_STREAMING;
+	if (!streaming)
+		a20_gip_reset(a20);
+	spin_unlock_irqrestore(&a20->lock, flags);
+
+	err = usb_submit_urb(a20->data_in_urb, GFP_NOIO);
+	if (err)
+		return err;
+
+	if (streaming)
+		schedule_work(&a20->start_work);
+	else
+		schedule_delayed_work(&a20->state_work, msecs_to_jiffies(2000));
+
+	a20_card_set_power(a20, true);
+
+	return 0;
+}
+
+static int a20_resume(struct usb_interface *intf)
+{
+	struct a20 *a20 = usb_get_intfdata(intf);
+
+	if (!a20 || intf != a20->intf_data)
+		return 0;
+
+	return a20_restart(a20, false);
+}
+
+static int a20_reset_resume(struct usb_interface *intf)
+{
+	struct a20 *a20 = usb_get_intfdata(intf);
+
+	if (!a20 || intf != a20->intf_data)
+		return 0;
+
+	dev_dbg(&intf->dev, "reset during resume\n");
+
+	return a20_restart(a20, true);
 }
 
 static const struct usb_device_id a20_id_table[] = {
@@ -286,6 +369,9 @@ static struct usb_driver a20_driver = {
 	.name = "astro_a20",
 	.probe = a20_probe,
 	.disconnect = a20_disconnect,
+	.suspend = a20_suspend,
+	.resume = a20_resume,
+	.reset_resume = a20_reset_resume,
 	.id_table = a20_id_table,
 	.disable_hub_initiated_lpm = 1,
 };

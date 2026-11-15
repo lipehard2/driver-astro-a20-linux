@@ -16,7 +16,7 @@ With the `astro_a20` module loaded, the headset shows up as a regular ALSA/PipeW
 - 48 kHz stereo output
 - 16 kHz mono microphone
 
-> Status: work in progress. Works end to end (music, microphone, PipeWire). Still missing: suspend testing.
+> Status: works end to end (music, microphone, PipeWire, suspend and resume), tested on CachyOS.
 
 ### Install
 
@@ -103,6 +103,7 @@ To remove it: `sudo rmmod astro_a20`.
 |---|---|
 | `src/` | kernel module (`main.c` USB, `gip.c` protocol, `audio.c` streaming and ALSA) |
 | `tools/gip_probe.c` | userspace prototype (libusb) used to map the protocol |
+| `tools/e2e-test.sh` | end-to-end check: plays a sound, records the microphone and plays it back |
 | `docs/protocol.md` | observed protocol: handshake, formats, authentication, firmware quirks (in Portuguese) |
 | `udev/70-astro-a20.rules` | user access to the USB device, to run `gip_probe` without root |
 
@@ -125,8 +126,7 @@ Com o módulo `astro_a20` carregado, o fone aparece como um dispositivo ALSA/Pip
 - saída estéreo 48 kHz
 - microfone mono 16 kHz
 
-> Status: em desenvolvimento. Funciona de ponta a ponta (música, microfone, PipeWire). Ainda falta: testar a
-> suspensão.
+> Status: funciona de ponta a ponta (música, microfone, PipeWire, suspender e retomar), testado no CachyOS.
 
 ### Instalação
 
@@ -213,6 +213,7 @@ Para remover: `sudo rmmod astro_a20`.
 |---|---|
 | `src/` | módulo de kernel (`main.c` USB, `gip.c` protocolo, `audio.c` streaming e ALSA) |
 | `tools/gip_probe.c` | protótipo em userspace (libusb) usado para mapear o protocolo |
+| `tools/e2e-test.sh` | teste de ponta a ponta: toca um som, grava o microfone e reproduz a gravação |
 | `docs/protocol.md` | protocolo observado: handshake, formatos, autenticação, quirks do firmware |
 | `udev/70-astro-a20.rules` | acesso do usuário ao dispositivo USB, para usar o `gip_probe` sem root |
 

@@ -94,8 +94,9 @@ To remove it: `sudo rmmod astro_a20`.
 - The transmitter always powers up in game mode, and its mode button only switches to PC mode right away while a
   GIP host is active. Without this driver the button seems to do nothing until the PC reboots; with it, the button
   switches between game and PC mode in about a second, in both directions.
-- The headset ignores host volume commands, so microphone gain is applied in software: the ALSA control
-  **Mic Capture Volume** goes from 0 to +24 dB (default 0 dB, no gain), e.g. `amixer -c A20 set Mic 6`.
+- The headset ignores host volume commands, so the microphone volume is applied in software. PipeWire drives it
+  through the ALSA control **Mic Capture Volume** (−24 dB to 0 dB): 100% in the system sound settings means the
+  microphone exactly as the headset sends it.
 
 ### Layout
 
@@ -204,8 +205,9 @@ Para remover: `sudo rmmod astro_a20`.
 - O transmissor sempre liga no modo game, e o botão de modo só troca para o modo PC na hora quando há um host GIP
   ativo. Sem este driver o botão parece não fazer nada até o PC ser reiniciado; com ele, o botão alterna entre game e
   PC em cerca de um segundo, nos dois sentidos.
-- O fone ignora comandos de volume do host, então o ganho do microfone é aplicado por software: o controle ALSA
-  **Mic Capture Volume** vai de 0 a +24 dB (padrão 0 dB, sem ganho), ex.: `amixer -c A20 set Mic 6`.
+- O fone ignora comandos de volume do host, então o volume do microfone é aplicado por software. O PipeWire o
+  controla pelo controle ALSA **Mic Capture Volume** (−24 dB a 0 dB): 100% nas configurações de som significa o
+  microfone exatamente como o fone envia.
 
 ### Estrutura
 

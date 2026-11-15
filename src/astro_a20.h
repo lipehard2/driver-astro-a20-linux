@@ -107,13 +107,19 @@ struct a20 {
 	struct a20_stream playback;
 	struct a20_stream capture;
 
-	/* software microphone gain: the headset ignores host volume commands */
-	int mic_gain_db;
+	/*
+	 * software microphone volume, the headset ignores host volume
+	 * commands: level N attenuates by (A20_MIC_LEVEL_MAX - N) dB
+	 */
+	int mic_level;
 	bool mic_enabled;
 };
 
-#define A20_MIC_GAIN_MAX_DB 24
-#define A20_MIC_GAIN_DEFAULT_DB 0
+/*
+ * PipeWire drives this control as the hardware capture volume, so its
+ * maximum must be unity gain: 100% in PipeWire means no gain.
+ */
+#define A20_MIC_LEVEL_MAX 24
 
 /* gip.c */
 int a20_gip_header_len(u32 len);

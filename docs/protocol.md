@@ -47,7 +47,10 @@ host SET_INTERFACE(1, 1), então stream iso nos dois sentidos
   host 06 30 .. 0e  00 42 00 02 00 54  <8 B trailer>                                      pede Client Hello (80 B)
   dev  06 f0 .. (chunked, 90 B)  00 c2 00 02 00 54  02 01 00 50  <32 B random> <48 B>    Client Hello v1
   ```
-- O fone usa a autenticação **v1** (RSA). Ainda não foi testado se ele volta a mutar sem concluir o handshake.
+- O fone usa a autenticação **v1** (RSA). Concluir o handshake não é necessário: em um mês de uso diário
+  (2026-10-17 a 2026-11-15) o mic nunca voltou a mutar.
+- Desligar e religar o fone com o transmissor plugado não exige nada do driver: o áudio volta sozinho
+  (testado muitas vezes no mesmo período).
 - Capacidades: o fone aceita `01 04 05 06 08 60` e envia `01 02 03 04 06 08 60`.
 - Comando de cliente proprietário: `0x10`, até 64 B (classe `AstroGaming.Xbox.Devices.AstroDevice`).
 
@@ -69,8 +72,11 @@ host SET_INTERFACE(1, 1), então stream iso nos dois sentidos
 - O fone reporta o volume com o subcomando `0x00`: `00 04 32 32 32` (mute=04, gain=0x32, out=0x32, in=0x32).
 - Ele **ignora** comandos de volume do host, tanto no formato `0x03` (`03 04 64 32 64 00 00 00`, usado pelo xone) quanto no
   formato `0x00` (`00 04 32 32 64`). Não responde, e o nível do mic não muda.
-- Com voz, o mic fica entre −31 e −45 dBFS RMS, com ruído de fundo em −65 dBFS. O driver oferece ganho digital
-  (controle ALSA "Mic Capture Volume", 0 a +24 dB). O padrão é 0 dB: na prática +12 dB soou alto demais.
+- Com voz, o mic fica entre −31 e −45 dBFS RMS, com ruído de fundo em −65 dBFS. Isso soa adequado na prática: a
+  impressão inicial de mic baixo vinha do volume geral do sistema em 45%.
+- O driver expõe o controle ALSA "Mic Capture Volume". O PipeWire o assume como volume de hardware da entrada e liga
+  o slider a ele, por isso a escala vai de −24 dB a **0 dB no máximo** (padrão 0 dB): 100% no PipeWire = sem ganho.
+  Uma primeira versão ia de 0 a +24 dB, e o slider em 70% aplicava +14 dB, estourando o som.
 - O ganho de hardware provavelmente está no comando proprietário `0x10` da Astro (não mapeado; exigiria capturar o
   tráfego de um Xbox ou do app da Astro).
 

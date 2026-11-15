@@ -109,16 +109,16 @@ static bool a20_copy_playback(struct a20_stream *stream,
 	return a20_stream_advance(stream, runtime, len);
 }
 
-/* round(4096 * 10^(dB / 20)) for 0..24 dB */
-static const u16 a20_mic_gain_q12[A20_MIC_GAIN_MAX_DB + 1] = {
-	4096, 4596, 5157, 5786, 6492, 7284,
-	8173, 9170, 10289, 11544, 12953, 14533,
-	16306, 18296, 20529, 23034, 25844, 28997,
-	32536, 36506, 40960, 45958, 51566, 57858,
-	64917,
+/* round(4096 * 10^(dB / 20)) for -24..0 dB */
+static const u16 a20_mic_level_q12[A20_MIC_LEVEL_MAX + 1] = {
+	258, 290, 325, 365, 410, 460,
+	516, 579, 649, 728, 817, 917,
+	1029, 1154, 1295, 1453, 1631, 1830,
+	2053, 2303, 2584, 2900, 3254, 3651,
+	4096,
 };
 
-/* amplify len bytes of captured samples into the ring buffer */
+/* scale len bytes of captured samples into the ring buffer */
 static bool a20_copy_capture(struct a20 *a20, struct snd_pcm_runtime *runtime,
 			     const u8 *src, int len)
 {
@@ -130,12 +130,12 @@ static bool a20_copy_capture(struct a20 *a20, struct snd_pcm_runtime *runtime,
 	int i;
 
 	if (READ_ONCE(a20->mic_enabled))
-		gain = a20_mic_gain_q12[READ_ONCE(a20->mic_gain_db)];
+		gain = a20_mic_level_q12[READ_ONCE(a20->mic_level)];
 
+	/* gain never exceeds unity, so samples cannot overflow */
 	for (i = 0; i + 1 < len; i += 2) {
 		val = (s16)get_unaligned_le16(src + i) * gain >> 12;
-		put_unaligned_le16(clamp_t(s32, val, S16_MIN, S16_MAX),
-				   runtime->dma_area + pos);
+		put_unaligned_le16(val, runtime->dma_area + pos);
 
 		pos += 2;
 		if (pos >= buf_bytes)
@@ -458,7 +458,7 @@ static const struct snd_pcm_ops a20_pcm_ops = {
 	.pointer = a20_pcm_pointer,
 };
 
-static const DECLARE_TLV_DB_SCALE(a20_mic_gain_tlv, 0, 100, 0);
+static const DECLARE_TLV_DB_SCALE(a20_mic_level_tlv, -2400, 100, 0);
 
 static int a20_mic_volume_info(struct snd_kcontrol *kctl,
 			       struct snd_ctl_elem_info *info)
@@ -466,7 +466,7 @@ static int a20_mic_volume_info(struct snd_kcontrol *kctl,
 	info->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
 	info->count = 1;
 	info->value.integer.min = 0;
-	info->value.integer.max = A20_MIC_GAIN_MAX_DB;
+	info->value.integer.max = A20_MIC_LEVEL_MAX;
 
 	return 0;
 }
@@ -476,7 +476,7 @@ static int a20_mic_volume_get(struct snd_kcontrol *kctl,
 {
 	struct a20 *a20 = snd_kcontrol_chip(kctl);
 
-	val->value.integer.value[0] = READ_ONCE(a20->mic_gain_db);
+	val->value.integer.value[0] = READ_ONCE(a20->mic_level);
 
 	return 0;
 }
@@ -485,15 +485,15 @@ static int a20_mic_volume_put(struct snd_kcontrol *kctl,
 			      struct snd_ctl_elem_value *val)
 {
 	struct a20 *a20 = snd_kcontrol_chip(kctl);
-	long db = val->value.integer.value[0];
+	long level = val->value.integer.value[0];
 
-	if (db < 0 || db > A20_MIC_GAIN_MAX_DB)
+	if (level < 0 || level > A20_MIC_LEVEL_MAX)
 		return -EINVAL;
 
-	if (db == READ_ONCE(a20->mic_gain_db))
+	if (level == READ_ONCE(a20->mic_level))
 		return 0;
 
-	WRITE_ONCE(a20->mic_gain_db, db);
+	WRITE_ONCE(a20->mic_level, level);
 
 	return 1;
 }
@@ -531,7 +531,7 @@ static const struct snd_kcontrol_new a20_controls[] = {
 		.info = a20_mic_volume_info,
 		.get = a20_mic_volume_get,
 		.put = a20_mic_volume_put,
-		.tlv.p = a20_mic_gain_tlv,
+		.tlv.p = a20_mic_level_tlv,
 	},
 	{
 		.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
